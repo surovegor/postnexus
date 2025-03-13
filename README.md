@@ -18,3 +18,9 @@ schedule - Контент-план
 addchannel - Добавить канал
 settings - Настройки
 help - Помощь
+
+### discription picture
+public/description-picture.png
+
+### logo
+public/logo.jpg
