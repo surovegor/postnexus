@@ -1,26 +1,25 @@
 const { Markup } = require('telegraf');
 
 module.exports = function (bot, userSelectedChannels, scheduledPosts) {
-  // Обработчик кнопки "Создать пост"
-  bot.hears('Создать пост', (ctx) => {
+  function startCreatingPost(ctx) { // Обработчик кнопки "Создать пост"
     const userId = ctx.from.id;
     const selectedChannel = userSelectedChannels.get(userId);
-
+  
     if (!selectedChannel) {
       ctx.reply('Сначала выберите канал в настройках.');
       return;
     }
+  
+    ctx.reply(`Пост будет опубликован в канале ${selectedChannel.name}.\n\nТеперь отправьте боту то, что хотите опубликовать.`);
+    
+    ctx.session.creatingPost = true; // Устанавливаем состояние "создание поста"
+  }
+  
+  bot.command('newpost', (ctx) => startCreatingPost(ctx)); // Обработчик команды /newpost
+  bot.hears('Создать пост', (ctx) => startCreatingPost(ctx)); // Обработчик кнопки "Создать пост"
 
-    ctx.reply(`Пост будет опубликован в канале ${selectedChannel.name}. Отправьте боту то, что хотите опубликовать.`);
-
-    // Устанавливаем состояние "создание поста"
-    ctx.session.creatingPost = true;
-  });
-
-  // Обработчик для получения контента поста
-  bot.on('message', async (ctx) => {
-    // Проверяем, находится ли пользователь в состоянии "создание поста"
-    if (ctx.session.creatingPost) {
+  bot.on('message', async (ctx) => { // Обработчик для получения контента поста
+    if (ctx.session.creatingPost) { // Проверяем, находится ли пользователь в состоянии "создание поста"
       const userId = ctx.from.id;
       const selectedChannel = userSelectedChannels.get(userId);
 
@@ -35,11 +34,9 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
         media: ctx.message.photo ? ctx.message.photo[0].file_id : null, // Если есть фото
       };
 
-      // Сохраняем пост для предпросмотра
-      ctx.session.postContent = postContent;
+      ctx.session.postContent = postContent; // Сохраняем пост для предпросмотра
 
-      // Дублируем пост для проверки
-      if (postContent.media) {
+      if (postContent.media) { // Дублируем пост для проверки
         await ctx.replyWithPhoto(postContent.media, {
           caption: postContent.text,
           caption_entities: postContent.entities,
@@ -60,13 +57,11 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
         });
       }
 
-      // Сбрасываем состояние "создание поста"
-      ctx.session.creatingPost = false;
+      ctx.session.creatingPost = false; // Сбрасываем состояние "создание поста"
       return; // Важно: завершаем обработку, чтобы не попасть в другие обработчики
     }
 
-    // Проверяем, находится ли пользователь в состоянии "ввод времени"
-  if (ctx.session.schedulingPost && ctx.message.text) {
+  if (ctx.session.schedulingPost && ctx.message.text) { // Проверяем, находится ли пользователь в состоянии "ввод времени"
     const userId = ctx.from.id;
     const selectedChannel = userSelectedChannels.get(userId);
 
@@ -76,9 +71,8 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     }
 
     const timeInput = ctx.message.text;
-
-    // Разбираем строку на компоненты даты и времени
-    const [datePart, timePart] = timeInput.split(' ');
+   
+    const [datePart, timePart] = timeInput.split(' '); // Разбираем строку на компоненты даты и времени
     if (!datePart || !timePart) {
       ctx.reply('Некорректный формат времени. Используйте формат ДД.ММ.ГГГГ ЧЧ:ММ.');
       return;
@@ -87,43 +81,38 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     const [day, month, year] = datePart.split('.');
     const [hour, minute] = timePart.split(':');
 
-    // Проверяем, что все компоненты даты и времени присутствуют
-    if (!day || !month || !year || !hour || !minute) {
+    if (!day || !month || !year || !hour || !minute) { // Проверяем, что все компоненты даты и времени присутствуют
       ctx.reply('Некорректный формат времени. Используйте формат ДД.ММ.ГГГГ ЧЧ:ММ.');
       return;
     }
 
-    // Создаем объект Date
     const scheduledTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
 
-    // Проверяем, что дата корректна
     if (isNaN(scheduledTime.getTime())) {
-      ctx.reply('Некорректная дата или время. Попробуйте снова.');
+      ctx.reply('Некорректная дата или время. Попробуйте снова.'); // Проверяем, что дата корректна
       return;
     }
 
-    // Проверяем, что время в будущем
-    if (scheduledTime.getTime() <= Date.now()) {
+    if (scheduledTime.getTime() <= Date.now()) { // Проверяем, что время в будущем
       ctx.reply('Время публикации должно быть в будущем.');
       return;
     }
-
-    // Сохраняем пост
-    const post = {
+    
+    const post = { // Сохраняем пост
       channelId: selectedChannel.id,
       content: ctx.session.postContent,
       time: scheduledTime,
     };
 
-    if (!scheduledPosts.has(userId)) {
+    if (!scheduledPosts.has(userId)) 
       scheduledPosts.set(userId, []);
-    }
+    
     scheduledPosts.get(userId).push(post);
 
     ctx.reply(`Пост запланирован на ${scheduledTime.toLocaleString('ru-RU')}.`);
     console.log(selectedChannel);
-    // Запускаем таймер для публикации
-    const delay = scheduledTime.getTime() - Date.now();
+    
+    const delay = scheduledTime.getTime() - Date.now(); // Запускаем таймер для публикации
     if (delay > 0) {
       setTimeout(() => {
         if (post.content.media) {

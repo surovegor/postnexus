@@ -6,7 +6,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
   // Обработчик кнопки "Добавить канал"
   bot.action('add_channel', (ctx) => {
     const instructions = 
-`Чтобы подключить канал, сделайте @posted его администратором, дав следующие права:
+`Чтобы подключить канал, сделайте @PostNexusBot его администратором, дав следующие права:
 - Редактирование сообщений
 
 Затем отправьте публичную ссылку на ваш канал.`;

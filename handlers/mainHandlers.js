@@ -30,6 +30,6 @@ module.exports = function(bot, userTimezones, userChannels, userSelectedChannels
 
   bot.hears('Настройки', (ctx) => {
     const userId = ctx.from.id;
-    ctx.reply('Выберите настройку:', getSettingsKeyboard(userId, userTimezones, userSelectedChannels));
+    ctx.reply('В этом разделе вы можете настроить работу с ботом, с отдельным каналом, а также добавить новый канал.', getSettingsKeyboard(userId, userTimezones, userSelectedChannels));
   });
 };

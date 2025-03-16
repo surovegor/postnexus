@@ -30,10 +30,12 @@ const mainHandlers = require('./handlers/mainHandlers');
 const channelHandlers = require('./handlers/channelHandlers');
 const timeHandlers = require('./handlers/timeHandlers');
 const postHandlers = require('./handlers/postHandlers');
+const contentPlanHandler = require('./handlers/contentPlanHandlers');
 
 mainHandlers(bot, userTimezones, userChannels, userSelectedChannels);
 channelHandlers(bot, userChannels, userSelectedChannels, userTimezones);
 timeHandlers(bot, userTimezones, userSelectedChannels);
+contentPlanHandler(bot, userSelectedChannels, scheduledPosts);
 postHandlers(bot, userSelectedChannels, scheduledPosts);
 
 bot.launch();
