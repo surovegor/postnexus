@@ -27,13 +27,6 @@ module.exports = function(bot, userTimezones, userChannels, userSelectedChannels
     ctx.reply(welcomeMessage, { parse_mode: 'Markdown', ...menuKeyboard });
   });
 
-  bot.hears('Создать пост', (ctx) => {
-    ctx.reply('Вы выбрали "Добавить пост".');
-  });
-
-  bot.hears('Контент-план', (ctx) => {
-    ctx.reply('Вы выбрали "Контент-план".');
-  });
 
   bot.hears('Настройки', (ctx) => {
     const userId = ctx.from.id;

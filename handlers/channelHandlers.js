@@ -1,7 +1,9 @@
+// handlers/channelHandlers.js
 const { Markup } = require('telegraf');
 const { getSettingsKeyboard } = require('./utils');
 
 module.exports = function(bot, userChannels, userSelectedChannels, userTimezones) {
+  // Обработчик кнопки "Добавить канал"
   bot.action('add_channel', (ctx) => {
     const instructions = 
 `Чтобы подключить канал, сделайте @posted его администратором, дав следующие права:
@@ -11,33 +13,41 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
 
     ctx.reply(instructions);
 
-    bot.on('message', (ctx) => {
-      const channelLink = ctx.message.text;
-      const userId = ctx.from.id;
-
-      if (channelLink.startsWith('https://t.me/')) {
-        const channelName = channelLink.split('/').pop();
-        const channelId = `channel_${Date.now()}`;
-
-        if (!userChannels.has(userId)) {
-          userChannels.set(userId, []);
-        }
-        const channels = userChannels.get(userId);
-        channels.push({ id: channelId, name: channelName, link: channelLink });
-
-        if (channels.length === 1) {
-          userSelectedChannels.set(userId, channels[0]);
-        }
-
-        ctx.reply(`Канал "${channelName}" успешно добавлен!`, {
-          reply_markup: getSettingsKeyboard(userId, userTimezones, userSelectedChannels).reply_markup,
-        });
-      } else {
-        ctx.reply('Пожалуйста, отправьте корректную публичную ссылку на канал.');
-      }
-    });
+    // Устанавливаем состояние "добавление канала"
+    ctx.session.addingChannel = true;
   });
 
+  // Обработчик для получения ссылки на канал
+  bot.hears(/https:\/\/t\.me\//, (ctx) => {
+    // Проверяем, находится ли пользователь в состоянии "добавление канала"
+    if (ctx.session.addingChannel) {
+      const userId = ctx.from.id;
+      const channelLink = ctx.message.text;
+
+      const channelName = `@${channelLink.split('/').pop()}`;
+      const channelId = `channel_${Date.now()}`;
+
+      if (!userChannels.has(userId)) {
+        userChannels.set(userId, []);
+      }
+      const channels = userChannels.get(userId);
+      channels.push({ id: channelId, name: channelName, link: channelLink });
+
+      // Если это первый канал, автоматически выбираем его
+      if (channels.length === 1) {
+        userSelectedChannels.set(userId, channels[0]);
+      }
+
+      ctx.reply(`Канал "${channelName}" успешно добавлен!`, {
+        reply_markup: getSettingsKeyboard(userId, userTimezones, userSelectedChannels).reply_markup,
+      });
+
+      // Сбрасываем состояние
+      ctx.session.addingChannel = false;
+    }
+  });
+
+  // Обработчик кнопки "Выбрать канал"
   bot.action('select_channel', (ctx) => {
     const userId = ctx.from.id;
     const channels = userChannels.get(userId) || [];
@@ -60,6 +70,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
     });
   });
 
+  // Обработчик выбора канала
   bot.action(/choose_channel_(.+)/, (ctx) => {
     const userId = ctx.from.id;
     const channelId = ctx.match[1];
@@ -75,6 +86,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
     }
   });
 
+  // Обработчик кнопки "Удалить канал"
   bot.action('delete_channel', (ctx) => {
     const userId = ctx.from.id;
     const channels = userChannels.get(userId) || [];
@@ -96,6 +108,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
     });
   });
 
+  // Обработчик удаления канала
   bot.action(/delete_channel_(.+)/, (ctx) => {
     const userId = ctx.from.id;
     const channelId = ctx.match[1];
@@ -115,6 +128,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
     ctx.answerCbQuery('✅ Канал удален.');
   });
 
+  // Обработчик кнопки "Назад в настройки"
   bot.action('back_to_settings', (ctx) => {
     const userId = ctx.from.id;
     ctx.editMessageText('Выберите настройку:', {
@@ -122,6 +136,7 @@ module.exports = function(bot, userChannels, userSelectedChannels, userTimezones
     });
   });
 
+  // Обработчик кнопки "Назад в главное меню"
   bot.action('back_to_main', (ctx) => {
     ctx.reply('Возвращаемся в главное меню:', menuKeyboard);
   });
