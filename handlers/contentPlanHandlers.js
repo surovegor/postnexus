@@ -3,13 +3,13 @@ const moment = require('moment');
 moment.locale('ru');
 
 module.exports = function (bot, userSelectedChannels, scheduledPosts) {
-  function generateCalendar(year, month, userId, channelId) {
+  function generateCalendar(year, month, userId, channelName) {
     const startOfMonth = moment(`${year}-${month}`, 'YYYY-MM').startOf('month');
     const endOfMonth = moment(startOfMonth).endOf('month');
     const daysInMonth = endOfMonth.date();
     const firstDayOfWeek = startOfMonth.day();
 
-    const key = `${userId}_${channelId}`; // Ключ для получения постов
+    const key = `${userId}_${channelName}`; // Ключ для получения постов
     const userPosts = scheduledPosts.get(key) || [];
     const postsByDate = userPosts.reduce((acc, post) => {
       const postDate = moment(post.time).format('YYYY-MM-DD');
@@ -55,7 +55,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
       return;
     }
 
-    const calendar = generateCalendar(year, month, userId, selectedChannel.id);
+    const calendar = generateCalendar(year, month, userId, selectedChannel.name);
 
     const prevMonth = moment(`${year}-${month}`, 'YYYY-MM').subtract(1, 'month');
     const nextMonth = moment(`${year}-${month}`, 'YYYY-MM').add(1, 'month');
@@ -69,10 +69,10 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     const keyboard = Markup.inlineKeyboard([navigationButtons, ...calendar]);
 
     if (ctx.updateType === 'callback_query') {
-      return ctx.editMessageText('Выберите день:', keyboard);
+      return ctx.editMessageText(`Контент-план для канала ${selectedChannel.name}`, keyboard);
     }
 
-    return ctx.reply('Выберите день:', keyboard);
+    return ctx.reply(`Контент-план для канала ${selectedChannel.name}`, keyboard);
   }
 
   bot.command('schedule', (ctx) => {
@@ -102,12 +102,12 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     }
 
     const date = ctx.match[1];
-    const key = `${userId}_${selectedChannel.id}`;
+    const key = `${userId}_${selectedChannel.name}`;
     const userPosts = scheduledPosts.get(key) || [];
     const postsForDay = userPosts.filter(post => moment(post.time).format('YYYY-MM-DD') === date);
 
     if (postsForDay.length === 0) {
-      ctx.reply('На этот день нет запланированных постов.');
+      ctx.reply(`На ${moment(date).format('DD.MM.YYYY')} нет запланированных постов в канале ${selectedChannel.name}.`);
       ctx.answerCbQuery();
       return;
     }
@@ -117,7 +117,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     ]);
 
     ctx.reply(
-      `Посты, запланированные на ${moment(date).format('DD.MM.YYYY')}:`,
+      `Посты в канале ${selectedChannel.name} на ${moment(date).format('DD.MM.YYYY')}:`,
       Markup.inlineKeyboard(postButtons)
     );
     ctx.answerCbQuery();
@@ -134,7 +134,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
 
     const date = ctx.match[1];
     const postIndex = parseInt(ctx.match[2]);
-    const key = `${userId}_${selectedChannel.id}`;
+    const key = `${userId}_${selectedChannel.name}`;
     const userPosts = scheduledPosts.get(key) || [];
     const postsForDay = userPosts.filter(post => moment(post.time).format('YYYY-MM-DD') === date);
     const post = postsForDay[postIndex];
@@ -150,13 +150,13 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     ]);
 
     if (post.content.media) {
-      ctx.replyWithPhoto(post.content.media, {
-        caption: post.content.text,
+      await ctx.replyWithPhoto(post.content.media, {
+        caption: `Канал: ${selectedChannel.name}\nДата: ${moment(post.time).format('DD.MM.YYYY HH:mm')}\n\n${post.content.text}`,
         caption_entities: post.content.entities,
         reply_markup: actionButtons.reply_markup,
       });
     } else {
-      ctx.reply(post.content.text, {
+      await ctx.reply(`Канал: ${selectedChannel.name}\nДата: ${moment(post.time).format('DD.MM.YYYY HH:mm')}\n\n${post.content.text}`, {
         entities: post.content.entities,
         reply_markup: actionButtons.reply_markup,
       });
@@ -175,7 +175,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
 
     const date = ctx.match[1];
     const postIndex = parseInt(ctx.match[2]);
-    const key = `${userId}_${selectedChannel.id}`;
+    const key = `${userId}_${selectedChannel.name}`;
     const userPosts = scheduledPosts.get(key) || [];
     const postsForDay = userPosts.filter(post => moment(post.time).format('YYYY-MM-DD') === date);
 
@@ -195,7 +195,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     const updatedPostsForDay = postsForDay.filter((post, index) => index !== postIndex);
 
     if (updatedPostsForDay.length === 0) {
-      await ctx.reply('На этот день больше нет запланированных постов.');
+      await ctx.reply(`На ${moment(date).format('DD.MM.YYYY')} больше нет запланированных постов в канале ${selectedChannel.name}.`);
       return;
     }
 
@@ -204,7 +204,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     ]);
 
     await ctx.reply(
-      `Посты, запланированные на ${moment(date).format('DD.MM.YYYY')}:`,
+      `Оставшиеся посты в канале ${selectedChannel.name} на ${moment(date).format('DD.MM.YYYY')}:`,
       Markup.inlineKeyboard(postButtons)
     );
   });
