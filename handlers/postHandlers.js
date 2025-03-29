@@ -1,6 +1,76 @@
 const { Markup } = require('telegraf');
+require('dotenv').config();
+const API_TOKEN = process.env.API_TOKEN;
 
 module.exports = function (bot, userSelectedChannels, scheduledPosts) {
+
+  const API_URL = 'https://api.intelligence.io.solutions/api/v1/chat/completions';
+
+  // Функция для очистки ответа от тегов <think>
+  function cleanAIResponse(text) {
+    return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  }
+
+  async function improveTextWithAI(text) {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${API_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: "deepseek-ai/DeepSeek-R1",
+          messages: [
+            {
+              role: "system",
+              content: "Исправь орфографические, пунктуационные и грамматические ошибки в тексте. Сохрани исходный стиль и структуру текста. Не добавляй комментарии, размышления (<think>) или дополнительные объяснения. Верни только исправленный вариант текста, без каких-либо дополнений. Основные правила: 1. Исправь ошибки, но сохрани авторский стиль 2. Не меняй структуру предложений 3. Не добавляй новые фразы или слова 4. Верни ровно тот же текст, но без ошибок 5. Не используй теги <think> и подобные 6. Не пиши ничего кроме исправленного текста"
+            },
+            {
+              role: "user",
+              content: text
+            }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const rawText = data.choices[0]?.message?.content || text;
+      return cleanAIResponse(rawText); // Очищаем ответ от тегов
+    } catch (error) {
+      console.error('Ошибка при обращении к API:', error);
+      return text;
+    }
+  }
+
+  async function showPostWithOptions(ctx, postContent) {
+    const keyboard = Markup.inlineKeyboard([
+      [
+        { text: 'Улучшить', callback_data: 'improve_post' },
+        { text: 'Отложить', callback_data: 'schedule_post' }
+      ]
+    ]);
+
+    if (postContent.media) {
+      await ctx.replyWithPhoto(postContent.media, {
+        caption: postContent.text,
+        caption_entities: postContent.entities,
+        reply_markup: keyboard.reply_markup
+      });
+    } else {
+      await ctx.reply(postContent.text, {
+        entities: postContent.entities,
+        reply_markup: keyboard.reply_markup
+      });
+    }
+  }
+
   function startCreatingPost(ctx) {
     const userId = ctx.from.id;
     const selectedChannel = userSelectedChannels.get(userId);
@@ -39,28 +109,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
       };
 
       ctx.session.postContent = postContent;
-
-      if (postContent.media) {
-        await ctx.replyWithPhoto(postContent.media, {
-          caption: postContent.text,
-          caption_entities: postContent.entities,
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Отложить', callback_data: 'schedule_post' }],
-            ],
-          },
-        });
-      } else if (postContent.text) {
-        await ctx.reply(postContent.text, {
-          entities: postContent.entities,
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Отложить', callback_data: 'schedule_post' }],
-            ],
-          },
-        });
-      }
-
+      await showPostWithOptions(ctx, postContent);
       ctx.session.creatingPost = false;
       return;
     }
@@ -101,12 +150,12 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
       }
 
       const post = {
-        channelName: selectedChannel.name, // Сохраняем имя канала, а не ID
+        channelName: selectedChannel.name,
         content: ctx.session.postContent,
         time: scheduledTime,
       };
 
-      const key = `${userId}_${selectedChannel.name}`; // Используем имя канала в ключе
+      const key = `${userId}_${selectedChannel.name}`;
 
       if (!scheduledPosts.has(key)) {
         scheduledPosts.set(key, []);
@@ -172,4 +221,58 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     ctx.reply(`Введите время публикации в формате ДД.ММ.ГГГГ ЧЧ:ММ (например, ${formattedTime}):`);
     ctx.session.schedulingPost = true;
   });
+
+  bot.action('improve_post', async (ctx) => {
+    try {
+        // Удаляем сообщение с кнопкой
+        try {
+            await ctx.deleteMessage().catch(err => {
+                console.log('Не удалось удалить сообщение:', err.message);
+            });
+        } catch (deleteError) {
+            console.log('Ошибка при удалении:', deleteError.message);
+        }
+
+        // Отправляем уведомление о начале обработки
+        const loadingMsg = await ctx.reply('🔄 Улучшаю текст...');
+
+        // Получаем и обрабатываем текст
+        const improvedText = await improveTextWithAI(ctx.session.postContent.text);
+        
+        if (!improvedText) {
+            await ctx.answerCbQuery('Не удалось улучшить текст');
+            return ctx.reply('Произошла ошибка при обработке текста');
+        }
+
+        // Обновляем контент
+        ctx.session.postContent.text = improvedText;
+        ctx.session.postContent.entities = null;
+
+        // Удаляем сообщение "Загрузка"
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение загрузки:', e.message);
+        }
+
+        // Показываем улучшенный пост
+        await showPostWithOptions(ctx, ctx.session.postContent);
+        
+        // Отвечаем на callback-запрос
+        try {
+            await ctx.answerCbQuery();
+        } catch (cbError) {
+            console.log('Callback уже обработан:', cbError.message);
+        }
+
+    } catch (error) {
+        console.error('Ошибка при улучшении:', error);
+        try {
+            await ctx.answerCbQuery('⚠️ Ошибка улучшения');
+            await ctx.reply('Произошла ошибка. Попробуйте снова.');
+        } catch (e) {
+            console.log('Ошибка при отправке сообщения об ошибке:', e.message);
+        }
+    }
+});
 };
