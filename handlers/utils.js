@@ -22,6 +22,7 @@ function getSettingsKeyboard(userId, userTimezones, userSelectedChannels) {
     [Markup.button.callback(`Часовой пояс: ${userTimezone.city} (${currentTime})`, 'timezone')],
     [Markup.button.callback(`Канал: ${channelName}`, 'select_channel')],
     [Markup.button.callback('Добавить канал', 'add_channel')],
+    [Markup.button.callback('Справочная информация', 'add_channel')],
   ]);
 }
 

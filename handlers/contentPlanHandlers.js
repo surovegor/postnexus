@@ -146,6 +146,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
     }
 
     const actionButtons = Markup.inlineKeyboard([
+      [Markup.button.callback('✏️ Изменить', `delete_post_${date}_${postIndex}`)],
       [Markup.button.callback('❌ Удалить', `delete_post_${date}_${postIndex}`)],
     ]);
 

@@ -6,7 +6,6 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
 
   const API_URL = 'https://api.intelligence.io.solutions/api/v1/chat/completions';
 
-  // Функция для очистки ответа от тегов <think>
   function cleanAIResponse(text) {
     return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   }
@@ -42,7 +41,7 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
       
       const data = await response.json();
       const rawText = data.choices[0]?.message?.content || text;
-      return cleanAIResponse(rawText); // Очищаем ответ от тегов
+      return cleanAIResponse(rawText);
     } catch (error) {
       console.error('Ошибка при обращении к API:', error);
       return text;
@@ -50,11 +49,13 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
   }
 
   async function showPostWithOptions(ctx, postContent) {
+    const userId = ctx.from.id;
+    const selectedChannel = userSelectedChannels.get(userId);
+    
     const keyboard = Markup.inlineKeyboard([
-      [
-        { text: 'Улучшить', callback_data: 'improve_post' },
-        { text: 'Отложить', callback_data: 'schedule_post' }
-      ]
+      [{ text: 'Улучшить с помощью нейросети', callback_data: 'improve_post' }],
+      [{ text: 'Добавить автоподпись', callback_data: 'add_signature' }],
+      [{ text: 'Отложить', callback_data: 'schedule_post' }]
     ]);
 
     if (postContent.media) {
@@ -224,7 +225,6 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
 
   bot.action('improve_post', async (ctx) => {
     try {
-        // Удаляем сообщение с кнопкой
         try {
             await ctx.deleteMessage().catch(err => {
                 console.log('Не удалось удалить сообщение:', err.message);
@@ -233,10 +233,8 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
             console.log('Ошибка при удалении:', deleteError.message);
         }
 
-        // Отправляем уведомление о начале обработки
         const loadingMsg = await ctx.reply('🔄 Улучшаю текст...');
 
-        // Получаем и обрабатываем текст
         const improvedText = await improveTextWithAI(ctx.session.postContent.text);
         
         if (!improvedText) {
@@ -244,21 +242,17 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
             return ctx.reply('Произошла ошибка при обработке текста');
         }
 
-        // Обновляем контент
         ctx.session.postContent.text = improvedText;
         ctx.session.postContent.entities = null;
 
-        // Удаляем сообщение "Загрузка"
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id);
         } catch (e) {
             console.log('Не удалось удалить сообщение загрузки:', e.message);
         }
 
-        // Показываем улучшенный пост
         await showPostWithOptions(ctx, ctx.session.postContent);
         
-        // Отвечаем на callback-запрос
         try {
             await ctx.answerCbQuery();
         } catch (cbError) {
@@ -274,5 +268,44 @@ module.exports = function (bot, userSelectedChannels, scheduledPosts) {
             console.log('Ошибка при отправке сообщения об ошибке:', e.message);
         }
     }
-});
+  });
+
+  bot.action('add_signature', async (ctx) => {
+    try {
+        // Удаляем сообщение с кнопками
+        try {
+            await ctx.deleteMessage();
+        } catch (deleteError) {
+            console.log('Не удалось удалить сообщение:', deleteError.message);
+        }
+
+        const userId = ctx.from.id;
+        const selectedChannel = userSelectedChannels.get(userId);
+        
+        if (!selectedChannel) {
+            await ctx.answerCbQuery('Канал не выбран');
+            return ctx.reply('Сначала выберите канал в настройках.');
+        }
+
+        const originalText = ctx.session.postContent.text;
+        const signature = `\n\n${selectedChannel.name}`;
+        
+        if (!originalText.includes(signature)) {
+            ctx.session.postContent.text = originalText + signature;
+            ctx.session.postContent.entities = null;
+        }
+
+        await showPostWithOptions(ctx, ctx.session.postContent);
+        
+        await ctx.answerCbQuery('Подпись добавлена');
+    } catch (error) {
+        console.error('Ошибка при добавлении подписи:', error);
+        try {
+            await ctx.answerCbQuery('⚠️ Ошибка добавления подписи');
+            await ctx.reply('Произошла ошибка при добавлении подписи. Попробуйте снова.');
+        } catch (e) {
+            console.log('Ошибка при отправке сообщения об ошибке:', e.message);
+        }
+    }
+  });
 };

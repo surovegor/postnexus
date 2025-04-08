@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config();
 const { Telegraf, session } = require('telegraf');
 const token = process.env.TELEGRAM_TOKEN;
@@ -10,11 +9,10 @@ if (!token) {
 
 const bot = new Telegraf(token);
 
-// Инициализация сессии
-bot.use(session());
+bot.use(session()); // Инициализация сессии
 bot.use((ctx, next) => {
   if (!ctx.session) {
-    ctx.session = {}; // Инициализируем session, если он не существует
+    ctx.session = {}; 
   }
   return next();
 });
